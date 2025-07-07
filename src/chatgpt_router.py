@@ -100,7 +100,9 @@ async def divination(
             'prompt': original_divination.get("prompt", ""),
             'prompt_type': original_prompt_type,
             'birthday': original_divination.get("birthday", ""),
-            'plum_flower': None
+            'plum_flower': None,
+            'tarot_draw_mode': original_divination.get("tarot_draw_mode", "random"),
+            'tarot_numbers': None
         })()
         
         # 如果是梅花易数，重建plum_flower对象
@@ -112,8 +114,24 @@ async def divination(
                 'model_dump': lambda: plum_data
             })()
         
-        # 获取原始的完整prompt和system_prompt
-        original_full_prompt, system_prompt = divination_obj.build_prompt(temp_body)
+        # 如果是塔罗牌，重建tarot_numbers对象
+        if original_prompt_type == "tarot" and original_divination.get("tarot_numbers"):
+            tarot_data = original_divination["tarot_numbers"]
+            temp_body.tarot_numbers = type('TarotNumbers', (), {
+                'first': tarot_data.get("first", 1),
+                'second': tarot_data.get("second", 2),
+                'third': tarot_data.get("third", 3)
+            })()
+        
+        # 对塔罗牌类型特殊处理，追问时不重新抽牌
+        if original_prompt_type == "tarot":
+            # 塔罗牌追问时使用简化的提示，不重新抽牌
+            from src.divination.tarot import TAROT_PROMPT
+            original_full_prompt = f"您的问题：{original_divination.get('prompt', '')}\n\n（此为追问模式，使用之前抽取的塔罗牌结果）"
+            system_prompt = TAROT_PROMPT
+        else:
+            # 其他占卜类型正常处理
+            original_full_prompt, system_prompt = divination_obj.build_prompt(temp_body)
         
         # 构建追问的用户输入（包含原始完整信息+追问）
         prompt = f"{original_full_prompt}\n\n【用户追问】\n{divination_body.follow_up_question}"
@@ -141,7 +159,9 @@ async def divination(
             "prompt": divination_body.prompt,
             "prompt_type": divination_body.prompt_type,
             "birthday": divination_body.birthday,
-            "plum_flower": divination_body.plum_flower.model_dump() if divination_body.plum_flower else None
+            "plum_flower": divination_body.plum_flower.model_dump() if divination_body.plum_flower else None,
+            "tarot_draw_mode": divination_body.tarot_draw_mode,
+            "tarot_numbers": divination_body.tarot_numbers.model_dump() if divination_body.tarot_numbers else None
         }
         session_id = session_manager.create_session(original_divination)
 

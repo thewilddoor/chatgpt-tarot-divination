@@ -2,9 +2,9 @@
 import {
   NInput, NButton, NCard, NDatePicker, NFormItem,
   NInputNumber, NTabs, NTabPane, NDrawer, NDrawerContent,
-  NProgress, NIcon, NTag
+  NProgress, NIcon, NTag, NRadioGroup, NRadio, NSpace
 } from 'naive-ui'
-import { watch, ref, onMounted } from "vue";
+import { watch, ref, onMounted, computed } from "vue";
 import MarkdownIt from 'markdown-it';
 import { fetchEventSource, EventStreamContentType } from '@microsoft/fetch-event-source';
 import { useStorage } from '@vueuse/core';
@@ -33,9 +33,47 @@ const md = new MarkdownIt();
 const showDrawer = ref(false)
 const plum_flower = useStorage("plum_flower", { num1: 0, num2: 0 })
 
+// 塔罗牌相关状态
+const tarot_draw_mode = useStorage("tarot_draw_mode", "random")
+const tarot_numbers = useStorage("tarot_numbers", { first: 1, second: 2, third: 3 })
+
 // 追问相关状态
 const followUpQuestion = ref("")
 const isFollowUpMode = ref(false)
+
+// 计算属性：检查塔罗牌数字是否完整
+const isTarotNumbersComplete = computed(() => {
+  if (prompt_type.value !== 'tarot' || tarot_draw_mode.value !== 'numbers') {
+    return true;
+  }
+  const { first, second, third } = tarot_numbers.value;
+  return first && second && third && 
+         first >= 1 && first <= 78 && 
+         second >= 1 && second <= 78 && 
+         third >= 1 && third <= 78;
+});
+
+// 验证塔罗牌输入
+const validateTarotInput = () => {
+  if (prompt_type.value !== 'tarot') {
+    return true; // 非塔罗牌模式，直接通过
+  }
+  
+  if (tarot_draw_mode.value === 'numbers') {
+    // 报数字模式，检查三个数字是否都有效
+    const { first, second, third } = tarot_numbers.value;
+    if (!first || !second || !third) {
+      alert('请填写完整的三个数字（1-78）');
+      return false;
+    }
+    if (first < 1 || first > 78 || second < 1 || second > 78 || third < 1 || third > 78) {
+      alert('数字必须在1-78之间');
+      return false;
+    }
+  }
+  
+  return true;
+}
 
 const onSubmit = async (isFollowUp) => {
   // 确保 isFollowUp 是布尔值
@@ -43,6 +81,11 @@ const onSubmit = async (isFollowUp) => {
   
   // 防止重复提交
   if (loading.value) {
+    return;
+  }
+  
+  // 验证塔罗牌输入（仅首次占卜时验证）
+  if (!isFollowUp && !validateTarotInput()) {
     return;
   }
   
@@ -77,6 +120,8 @@ const onSubmit = async (isFollowUp) => {
       prompt_type: prompt_type.value,
       birthday: birthday.value,
       plum_flower: prompt_type.value == "plum_flower" ? plum_flower.value : null,
+      tarot_draw_mode: prompt_type.value == "tarot" ? tarot_draw_mode.value : null,
+      tarot_numbers: prompt_type.value == "tarot" && tarot_draw_mode.value == "numbers" ? tarot_numbers.value : null,
       is_follow_up: isFollowUp,
       session_id: isFollowUp ? currentSession.value.sessionId : null,
       follow_up_question: isFollowUp ? followUpQuestion.value : null
@@ -248,8 +293,62 @@ onMounted(async () => {
       <n-tab-pane v-for="option in DIVINATION_OPTIONS" :name="option.key" :tab="option.label">
         <n-card v-if="prompt_type != 'about'">
           <div v-if="prompt_type == 'tarot'">
-            <n-input v-model:value="prompt" type="textarea" round maxlength="40" :autosize="{ minRows: 3 }"
-              placeholder="我的财务状况如何" />
+            <div style="display: inline-block; text-align: left; width: 100%;">
+              <h4>塔罗牌占卜 - 三牌阵</h4>
+              <n-form-item label="问题" label-placement="left">
+                <n-input v-model:value="prompt" type="textarea" round maxlength="40" :autosize="{ minRows: 2 }"
+                  placeholder="我的财务状况如何" />
+              </n-form-item>
+              
+              <n-form-item label="抽牌方式" label-placement="left">
+                <n-radio-group v-model:value="tarot_draw_mode" name="tarotMode">
+                  <n-space>
+                    <n-radio value="random">
+                      纯随机抽牌
+                    </n-radio>
+                    <n-radio value="numbers">
+                      报数字抽牌
+                    </n-radio>
+                  </n-space>
+                </n-radio-group>
+              </n-form-item>
+              
+              <div v-if="tarot_draw_mode === 'numbers'" class="number-selection">
+                <p style="margin: 10px 0; color: #666; font-size: 14px;">
+                  请选择三个数字（1-78），系统将洗牌后按你的数字抽取对应位置的牌
+                </p>
+                <n-space>
+                  <n-form-item label="第一张牌" label-placement="top">
+                    <n-input-number v-model:value="tarot_numbers.first" :min="1" :max="78" placeholder="1-78" />
+                  </n-form-item>
+                  <n-form-item label="第二张牌" label-placement="top">
+                    <n-input-number v-model:value="tarot_numbers.second" :min="1" :max="78" placeholder="1-78" />
+                  </n-form-item>
+                  <n-form-item label="第三张牌" label-placement="top">
+                    <n-input-number v-model:value="tarot_numbers.third" :min="1" :max="78" placeholder="1-78" />
+                  </n-form-item>
+                </n-space>
+                <p style="margin: 5px 0; color: #999; font-size: 12px;">
+                  💡 提示：三个数字可以相同，代表不同牌位的能量共鸣
+                </p>
+              </div>
+              
+              <div v-else class="random-mode">
+                <p style="margin: 10px 0; color: #666; font-size: 14px;">
+                  🎲 将使用完全随机的方式为你抽取三张塔罗牌
+                </p>
+                <p style="margin: 5px 0; color: #999; font-size: 12px;">
+                  系统将自动洗牌并随机选择三张牌作为你的占卜结果
+                </p>
+              </div>
+              
+              <!-- 调试信息（开发时临时显示） -->
+              <div v-if="false" style="margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 6px; font-size: 12px;">
+                <p>当前抽牌模式: {{ tarot_draw_mode }}</p>
+                <p>数字值: {{ JSON.stringify(tarot_numbers) }}</p>
+                <p>按钮可用性: {{ isTarotNumbersComplete }}</p>
+              </div>
+            </div>
           </div>
           <div v-if="prompt_type == 'birthday'">
             <div style="display: inline-block; text-align: left;">
@@ -287,7 +386,7 @@ onMounted(async () => {
             <n-button class="button" @click="showDrawer = !showDrawer" tertiary type="primary">
               {{ loading ? "点击打开占卜结果页面" : "查看占卜结果" }}
             </n-button>
-            <n-button class="button" @click="() => onSubmit(false)" type="primary" :disabled="loading">
+            <n-button class="button" @click="() => onSubmit(false)" type="primary" :disabled="loading || !isTarotNumbersComplete">
               {{ loading ? "正在占卜中..." : "占卜" }}
             </n-button>
             <n-button v-if="currentSession.sessionId" class="button" @click="startNewDivination" tertiary>
@@ -746,6 +845,23 @@ onMounted(async () => {
   }
 }
 
+/* 塔罗牌抽牌模式样式 */
+.number-selection {
+  background: rgba(32, 128, 240, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(32, 128, 240, 0.1);
+}
+
+.random-mode {
+  background: rgba(24, 160, 88, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  border: 1px solid rgba(24, 160, 88, 0.1);
+}
+
 /* 深色模式支持 */
 @media (prefers-color-scheme: dark) {
   .title-text {
@@ -807,6 +923,16 @@ onMounted(async () => {
   
   .remaining-count {
     color: #b0b0b0;
+  }
+  
+  .number-selection {
+    background: rgba(32, 128, 240, 0.1);
+    border-color: rgba(32, 128, 240, 0.2);
+  }
+  
+  .random-mode {
+    background: rgba(24, 160, 88, 0.1);
+    border-color: rgba(24, 160, 88, 0.2);
   }
 }
 </style>

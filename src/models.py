@@ -29,6 +29,12 @@ class PlumFlower(BaseModel):
     num2: int
 
 
+class TarotNumbers(BaseModel):
+    first: int = Field(ge=1, le=78, description="第一张牌的位置(1-78)")
+    second: int = Field(ge=1, le=78, description="第二张牌的位置(1-78)")
+    third: int = Field(ge=1, le=78, description="第三张牌的位置(1-78)")
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
@@ -49,6 +55,9 @@ class DivinationBody(BaseModel):
     prompt_type: str
     birthday: str
     plum_flower: Optional[PlumFlower] = None
+    # 塔罗牌相关字段
+    tarot_draw_mode: Optional[str] = Field(None, description="塔罗抽牌模式: random 或 numbers")
+    tarot_numbers: Optional[TarotNumbers] = None
     # 追问相关字段
     session_id: Optional[str] = None
     is_follow_up: bool = False

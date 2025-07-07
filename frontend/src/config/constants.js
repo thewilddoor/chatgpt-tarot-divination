@@ -2,18 +2,26 @@ export const DIVINATION_OPTIONS = [
     {
         label: '塔罗牌',
         key: 'tarot',
+        description: '使用78张塔罗牌进行三牌阵占卜',
+        features: ['真实抽牌算法', '正逆位判断', '过去-现在-未来牌阵']
     },
     {
         label: '生辰八字',
         key: 'birthday',
+        description: '基于出生时间分析命理运势',
+        features: ['八字排盘', '五行分析', '运势预测']
     },
     {
         label: '周公解梦',
         key: 'dream',
+        description: '解析梦境的象征意义',
+        features: ['梦境解析', '心理分析', '潜意识探索']
     },
     {
         label: '梅花易数',
         key: 'plum_flower',
+        description: '传统易学占卜方法',
+        features: ['专业起卦', '卦象分析', '易学推理']
     },
 ];
 
