@@ -12,28 +12,28 @@ class Settings(BaseSettings):
     # project settings
     project_name: str = "ai-divination"
 
-    # OpenAI API settings
-    api_key: str = Field(default="", exclude=True)
-    api_base: str = "https://api.openai.com/v1"
-    model: str = "gpt-3.5-turbo"
+    # OpenRouter API settings
+    api_key: str = Field(default="", exclude=True, alias="API_KEY")
+    api_base: str = Field(default="https://openrouter.ai/api/v1", alias="API_BASE")
+    model: str = Field(default="anthropic/claude-sonnet-4", alias="MODEL")
 
     # github oauth login settings
-    github_client_id: str = ""
-    github_client_secret: str = Field(default="", exclude=True)
-    jwt_secret: str = Field(default="secret", exclude=True)
+    github_client_id: str = Field(default="", alias="GITHUB_CLIENT_ID")
+    github_client_secret: str = Field(default="", exclude=True, alias="GITHUB_CLIENT_SECRET")
+    jwt_secret: str = Field(default="secret", exclude=True, alias="JWT_SECRET")
 
     # google ads settings
-    ad_client: str = ""
-    ad_slot: str = ""
+    ad_client: str = Field(default="", alias="AD_CLIENT")
+    ad_slot: str = Field(default="", alias="AD_SLOT")
 
     # cache settings
-    cache_client_type: str = "memory"
+    cache_client_type: str = Field(default="memory", alias="CACHE_CLIENT_TYPE")
     redis_url: str = Field(default="", exclude=True, alias="KV_URL")
     upstash_api_url: str = Field(default="", alias="KV_REST_API_URL")
     upstash_api_token: str = Field(default="", exclude=True, alias="KV_REST_API_TOKEN")
 
     # rate limit settings
-    enable_rate_limit: bool = True
+    enable_rate_limit: bool = Field(default=True, alias="ENABLE_RATE_LIMIT")
     # rate limit xxx request per xx seconds
     rate_limit: Tuple[int, int] = (60, 60 * 60)
     user_rate_limit: Tuple[int, int] = (600, 60 * 60)

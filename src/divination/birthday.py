@@ -2,10 +2,12 @@ import datetime
 from src.models import DivinationBody
 from .base import DivinationFactory
 
-BIRTHDAY_PROMPT = "我请求你担任中国传统的生辰八字算命的角色。" \
-    "我将会给你我的生日，请你根据我的生日推算命盘，" \
-    "分析五行属性、吉凶祸福、财运、婚姻、健康、事业等方面的情况，" \
-    "并为其提供相应的指导和建议。"
+BIRTHDAY_PROMPT = """我请求你担任中国传统的生辰八字算命大师的角色。
+我将会给你我的生日，请你根据我的生日推算命盘，
+分析五行属性、吉凶祸福、财运、婚姻、健康、事业等方面的情况，
+并为其提供相应的指导和建议。
+
+"""
 
 
 class BirthdayFactory(DivinationFactory):

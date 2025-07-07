@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -24,30 +24,35 @@ class User(BaseModel):
     expire_at: float
 
 
-class NewName(BaseModel):
-    surname: str
-    sex: str
-    birthday: str
-    new_name_prompt: str
-
-
 class PlumFlower(BaseModel):
     num1: int
     num2: int
 
 
-class Fate(BaseModel):
-    name1: str
-    name2: str
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+    timestamp: float
+
+
+class DivinationSession(BaseModel):
+    session_id: str
+    original_divination: Dict[str, Any]  # 原始卦象信息
+    messages: List[ChatMessage] = []
+    follow_up_count: int = 0
+    max_follow_ups: int = 10
+    max_context_messages: int = 5
 
 
 class DivinationBody(BaseModel):
     prompt: str
     prompt_type: str
     birthday: str
-    new_name: Optional[NewName] = None
     plum_flower: Optional[PlumFlower] = None
-    fate: Optional[Fate] = None
+    # 追问相关字段
+    session_id: Optional[str] = None
+    is_follow_up: bool = False
+    follow_up_question: Optional[str] = None
 
 
 class BirthdayBody(BaseModel):
@@ -57,3 +62,11 @@ class BirthdayBody(BaseModel):
 class CommonResponse(BaseModel):
     content: str
     request_id: str
+
+
+class DivinationResponse(BaseModel):
+    content: str
+    session_id: str
+    follow_up_count: int
+    can_follow_up: bool
+    original_divination_summary: Optional[str] = None

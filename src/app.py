@@ -7,13 +7,13 @@ from fastapi.responses import PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.limiter import get_real_ipaddr
-from src.chatgpt_router import router as chatgpt_router
+from src.chatgpt_router import router as ai_router
 from src.user_router import router as user_router
 
 
 _logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Chatgpt Divination API")
+app = FastAPI(title="AI Divination API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chatgpt_router)
+app.include_router(ai_router)
 app.include_router(user_router)
 
 if os.path.exists("dist"):

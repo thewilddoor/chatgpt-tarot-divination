@@ -2,9 +2,11 @@ from fastapi import HTTPException
 from src.models import DivinationBody
 from .base import DivinationFactory
 
-DREAM_PROMPT = "我请求你担任中国传统的周公解梦师的角色。" \
-    "我将会给你我的梦境，请你解释我的梦境，" \
-    "并为其提供相应的指导和建议。"
+DREAM_PROMPT = """我请求你担任中国传统的周公解梦师的角色。
+我将会给你我的梦境，请你解释我的梦境，
+并为其提供相应的指导和建议。
+
+"""
 
 
 class DreamFactory(DivinationFactory):
