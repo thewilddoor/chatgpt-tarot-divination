@@ -51,7 +51,20 @@ class MeiHuaFormatter:
         basic = result["basic_info"]
         lines.append("=== 梅花易数完整排盘信息 ===")
         lines.append(f"起卦时间：{basic['qigua_time']}")
-        lines.append(f"起卦数字：{basic['input_numbers'][0]} 和 {basic['input_numbers'][1]}")
+        # 显示起卦数字
+        if len(basic['input_numbers']) <= 2:
+            lines.append(f"起卦数字：{' 和 '.join(map(str, basic['input_numbers']))}")
+        else:
+            lines.append(f"起卦数字组：{basic['input_numbers']}")
+            if 'first_half' in basic and 'second_half' in basic:
+                lines.append(f"数字分组：前半部分{basic['first_half']}(和:{basic['first_sum']}) + 后半部分{basic['second_half']}(和:{basic['second_sum']})")
+                if 'zhong_gua_total' in basic:
+                    lines.append(f"动爻计算：重卦总数{basic['zhong_gua_total']} % 6 = {basic['zhong_gua_total'] % 6 if basic['zhong_gua_total'] % 6 != 0 else 6}")
+                    lines.append(f"重卦总数组成：上卦数{basic['first_sum'] % 8 if basic['first_sum'] % 8 != 0 else 8} + 下卦数{basic['second_sum'] % 8 if basic['second_sum'] % 8 != 0 else 8} + 时辰数{basic.get('shichen', 0)} = {basic['zhong_gua_total']}")
+                else:
+                    lines.append(f"动爻计算：后半部分和{basic['second_sum']} % 6 = {basic['second_sum'] % 6 if basic['second_sum'] % 6 != 0 else 6}")
+                if 'shichen' in basic:
+                    lines.append(f"当前时辰：{basic['shichen']}（已参与动爻计算）")
         lines.append(f"时令季节：{basic['season']}季 {basic['lunar_month']} {basic['time_dizhi']}时")
         if basic.get('question'):
             lines.append(f"问题：{basic['question']}")

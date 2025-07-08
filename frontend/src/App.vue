@@ -86,10 +86,6 @@ onMounted(async () => {
                     <n-button @click="toggleDark()">
                       {{ isDark ? '亮色' : '暗色' }}
                     </n-button>
-                    <n-button type="primary" ghost tag="a" target="_blank"
-                      href="https://github.com/dreamhunter2333/chatgpt-tarot-divination">
-                      ☆ Github
-                    </n-button>
                   </n-space>
                 </template>
                 <template #footer>

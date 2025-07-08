@@ -17,10 +17,6 @@ class Settings(BaseSettings):
     api_base: str = Field(default="https://openrouter.ai/api/v1", alias="API_BASE")
     model: str = Field(default="anthropic/claude-sonnet-4", alias="MODEL")
 
-    # github oauth login settings
-    github_client_id: str = Field(default="", alias="GITHUB_CLIENT_ID")
-    github_client_secret: str = Field(default="", exclude=True, alias="GITHUB_CLIENT_SECRET")
-    jwt_secret: str = Field(default="secret", exclude=True, alias="JWT_SECRET")
 
     # google ads settings
     ad_client: str = Field(default="", alias="AD_CLIENT")

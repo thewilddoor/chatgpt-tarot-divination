@@ -1,10 +1,13 @@
 import json
 import time
 from typing import Optional
+from types import SimpleNamespace
 from fastapi.responses import StreamingResponse
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError, APIConnectionError
 
 import logging
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -18,7 +21,11 @@ from src.limiter import get_real_ipaddr, check_rate_limit
 from src.divination import DivinationFactory
 from src.session_manager import session_manager
 
-client = OpenAI(api_key=settings.api_key, base_url=settings.api_base)
+client = OpenAI(
+    api_key=settings.api_key, 
+    base_url=settings.api_base,
+    timeout=60.0  # 设置60秒超时
+)
 router = APIRouter()
 _logger = logging.getLogger(__name__)
 STOP_WORDS = [
@@ -67,6 +74,9 @@ async def divination(
         
         session = session_manager.get_session(divination_body.session_id)
         if not session:
+            # 添加调试信息
+            logger.warning(f"Session not found: {divination_body.session_id}")
+            logger.warning(f"Current sessions: {list(session_manager.sessions.keys())}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="会话不存在或已过期"
@@ -96,32 +106,33 @@ async def divination(
             )
         
         # 重建原始DivinationBody对象
-        temp_body = type('TempDivinationBody', (), {
-            'prompt': original_divination.get("prompt", ""),
-            'prompt_type': original_prompt_type,
-            'birthday': original_divination.get("birthday", ""),
-            'plum_flower': None,
-            'tarot_draw_mode': original_divination.get("tarot_draw_mode", "random"),
-            'tarot_numbers': None
-        })()
+        temp_body = SimpleNamespace(
+            prompt=original_divination.get("prompt", ""),
+            prompt_type=original_prompt_type,
+            birthday=original_divination.get("birthday", ""),
+            plum_flower=None,
+            tarot_draw_mode=original_divination.get("tarot_draw_mode", "random"),
+            tarot_numbers=None
+        )
         
         # 如果是梅花易数，重建plum_flower对象
         if original_prompt_type == "plum_flower" and original_divination.get("plum_flower"):
             plum_data = original_divination["plum_flower"]
-            temp_body.plum_flower = type('PlumFlower', (), {
-                'num1': plum_data.get("num1", 0),
-                'num2': plum_data.get("num2", 0),
-                'model_dump': lambda: plum_data
-            })()
+            temp_body.plum_flower = SimpleNamespace(
+                number=plum_data.get("number", "123456"),
+                use_custom_time=plum_data.get("use_custom_time", False),
+                custom_datetime=plum_data.get("custom_datetime", ""),
+                model_dump=lambda: plum_data
+            )
         
         # 如果是塔罗牌，重建tarot_numbers对象
         if original_prompt_type == "tarot" and original_divination.get("tarot_numbers"):
             tarot_data = original_divination["tarot_numbers"]
-            temp_body.tarot_numbers = type('TarotNumbers', (), {
-                'first': tarot_data.get("first", 1),
-                'second': tarot_data.get("second", 2),
-                'third': tarot_data.get("third", 3)
-            })()
+            temp_body.tarot_numbers = SimpleNamespace(
+                first=tarot_data.get("first", 1),
+                second=tarot_data.get("second", 2),
+                third=tarot_data.get("third", 3)
+            )
         
         # 对塔罗牌类型特殊处理，追问时不重新抽牌
         if original_prompt_type == "tarot":
@@ -164,6 +175,7 @@ async def divination(
             "tarot_numbers": divination_body.tarot_numbers.model_dump() if divination_body.tarot_numbers else None
         }
         session_id = session_manager.create_session(original_divination)
+        logger.info(f"Created new session: {session_id}")
 
     # custom api key, model and base url support
     custom_base_url = request.headers.get("x-api-url")
@@ -172,9 +184,9 @@ async def divination(
     api_client = client
     api_model = custom_api_model if custom_api_model else settings.model
     if custom_base_url and custom_api_key:
-        api_client = OpenAI(api_key=custom_api_key, base_url=custom_base_url)
+        api_client = OpenAI(api_key=custom_api_key, base_url=custom_base_url, timeout=60.0)
     elif custom_api_key:
-        api_client = OpenAI(api_key=custom_api_key, base_url=settings.api_base)
+        api_client = OpenAI(api_key=custom_api_key, base_url=settings.api_base, timeout=60.0)
 
     if not (settings.api_base or custom_base_url) or not (settings.api_key or custom_api_key):
         raise HTTPException(
@@ -183,56 +195,85 @@ async def divination(
         )
 
     def get_ai_generator():
-        # 构建消息列表
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt
+        try:
+            # 构建消息列表
+            messages = [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                }
+            ]
+            
+            # 如果是追问，添加上下文消息并直接添加用户追问
+            if is_follow_up:
+                context_messages = session_manager.get_context_messages(session_id)
+                messages.extend(context_messages)
+                # 添加当前追问消息到会话历史
+                session_manager.add_message(session_id, "user", divination_body.follow_up_question)
+                messages.append({"role": "user", "content": prompt})
+            else:
+                # 首次占卜，直接添加用户消息
+                messages.append({"role": "user", "content": prompt})
+            
+            ai_stream = api_client.chat.completions.create(
+                model=api_model,
+                max_tokens=8192,
+                temperature=0.6,
+                stream=True,
+                messages=messages,
+                # OpenRouter specific headers can be added here if needed
+                extra_headers={
+                    "HTTP-Referer": "https://github.com/your-repo",
+                    "X-Title": "AI Divination App"
+                }
+            )
+            
+            complete_response = ""
+            for event in ai_stream:
+                if event.choices and event.choices[0].delta and event.choices[0].delta.content:
+                    current_response = event.choices[0].delta.content
+                    # 确保内容不为空且不重复
+                    if current_response and current_response.strip():
+                        complete_response += current_response
+                        # 发送响应数据和会话信息
+                        response_data = {
+                            "content": current_response,
+                            "session_id": session_id,
+                            "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
+                            "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
+                        }
+                        yield f"data: {json.dumps(response_data)}\n\n"
+            
+            # 将AI回复添加到会话
+            if session_id and complete_response:
+                session_manager.add_message(session_id, "assistant", complete_response)
+                
+        except APITimeoutError as e:
+            _logger.error(f"API timeout error: {e}")
+            error_data = {
+                "content": "❌ 服务器响应超时，请稍后重试。这可能是由于网络延迟或API服务器负载过高造成的。",
+                "session_id": session_id,
+                "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
+                "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
             }
-        ]
-        
-        # 如果是追问，添加上下文消息并直接添加用户追问
-        if is_follow_up:
-            context_messages = session_manager.get_context_messages(session_id)
-            messages.extend(context_messages)
-            # 添加当前追问消息到会话历史
-            session_manager.add_message(session_id, "user", divination_body.follow_up_question)
-            messages.append({"role": "user", "content": prompt})
-        else:
-            # 首次占卜，直接添加用户消息
-            messages.append({"role": "user", "content": prompt})
-        
-        ai_stream = api_client.chat.completions.create(
-            model=api_model,
-            max_tokens=8192,
-            temperature=0.6,
-            stream=True,
-            messages=messages,
-            # OpenRouter specific headers can be added here if needed
-            extra_headers={
-                "HTTP-Referer": "https://github.com/your-repo",
-                "X-Title": "AI Divination App"
+            yield f"data: {json.dumps(error_data)}\n\n"
+        except APIConnectionError as e:
+            _logger.error(f"API connection error: {e}")
+            error_data = {
+                "content": "❌ 网络连接失败，请检查网络设置后重试。",
+                "session_id": session_id,
+                "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
+                "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
             }
-        )
-        
-        complete_response = ""
-        for event in ai_stream:
-            if event.choices and event.choices[0].delta and event.choices[0].delta.content:
-                current_response = event.choices[0].delta.content
-                # 确保内容不为空且不重复
-                if current_response and current_response.strip():
-                    complete_response += current_response
-                    # 发送响应数据和会话信息
-                    response_data = {
-                        "content": current_response,
-                        "session_id": session_id,
-                        "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
-                        "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
-                    }
-                    yield f"data: {json.dumps(response_data)}\n\n"
-        
-        # 将AI回复添加到会话
-        if session_id and complete_response:
-            session_manager.add_message(session_id, "assistant", complete_response)
+            yield f"data: {json.dumps(error_data)}\n\n"
+        except Exception as e:
+            _logger.error(f"Unexpected error: {e}")
+            error_data = {
+                "content": f"❌ 占卜过程中发生错误：{str(e)}",
+                "session_id": session_id,
+                "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
+                "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
 
     return StreamingResponse(get_ai_generator(), media_type='text/event-stream')

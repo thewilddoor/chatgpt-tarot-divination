@@ -22,20 +22,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if os.path.exists("frontend/dist"):
+    # 挂载静态资源目录
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+
+# 添加API路由（确保在静态文件之前）
 app.include_router(ai_router)
 app.include_router(user_router)
 
-if os.path.exists("dist"):
+if os.path.exists("frontend/dist"):
+    # SPA路由处理
     @app.get("/")
+    @app.get("/login")
     @app.get("/login/{path}")
+    @app.get("/settings")
     async def read_index(request: Request):
         _logger.info(f"Request from {get_real_ipaddr(request)}")
         return FileResponse(
-            "dist/index.html",
+            "frontend/dist/index.html",
             headers={"Cache-Control": "no-cache"}
         )
-
-    app.mount("/", StaticFiles(directory="dist"), name="static")
 
 
 @app.get("/health")

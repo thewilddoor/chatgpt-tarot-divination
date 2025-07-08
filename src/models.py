@@ -13,10 +13,6 @@ class SettingsInfo(BaseModel):
     enable_rate_limit: bool = False
 
 
-class OauthBody(BaseModel):
-    login_type: str
-    code: Optional[str]
-
 
 class User(BaseModel):
     login_type: str
@@ -25,8 +21,9 @@ class User(BaseModel):
 
 
 class PlumFlower(BaseModel):
-    num1: int
-    num2: int
+    number: str = Field(min_length=1, max_length=32, description="起卦数字，将按位数分割", pattern=r'^\d+$')
+    custom_datetime: Optional[str] = Field(None, description="自定义起卦时间，格式：YYYY-MM-DD HH:MM:SS")
+    use_custom_time: bool = Field(False, description="是否使用自定义时间")
 
 
 class TarotNumbers(BaseModel):
@@ -48,6 +45,7 @@ class DivinationSession(BaseModel):
     follow_up_count: int = 0
     max_follow_ups: int = 10
     max_context_messages: int = 5
+    created_at: float = 0.0  # 会话创建时间戳
 
 
 class DivinationBody(BaseModel):

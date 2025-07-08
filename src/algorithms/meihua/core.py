@@ -10,27 +10,60 @@ from constants import *
 class MeiHuaCoreCalculator:
     """梅花易数核心计算器"""
     
+    
     @classmethod
-    def number_qigua(cls, num1: int, num2: int) -> Dict[str, Any]:
+    def number_group_qigua(cls, numbers: List[int], shichen: int = None) -> Dict[str, Any]:
         """
-        数字起卦法
+        数字组起卦法（按新规则）
         Args:
-            num1: 第一个数字（上卦）
-            num2: 第二个数字（下卦）
+            numbers: 一组数字
+            shichen: 时辰（1-12，对应子丑寅卯等）
         Returns:
             基础起卦信息
         """
-        # 计算上卦、下卦和动爻
-        shang_gua_num = num1 % 8 if num1 % 8 != 0 else 8
-        xia_gua_num = num2 % 8 if num2 % 8 != 0 else 8
-        dong_yao = (num1 + num2) % 6 if (num1 + num2) % 6 != 0 else 6
+        if not numbers:
+            raise ValueError("数字组不能为空")
+        
+        # 数字个数
+        count = len(numbers)
+        
+        # 分割数字组
+        if count == 1:  # 特殊情况：只有一个数字
+            first_half = numbers
+            second_half = numbers
+        elif count % 2 == 0:  # 偶数个数字：平分为二
+            mid = count // 2
+            first_half = numbers[:mid]
+            second_half = numbers[mid:]
+        else:  # 奇数个数字：前部分比后部分少一个数字
+            mid = count // 2
+            first_half = numbers[:mid]
+            second_half = numbers[mid:]
+        
+        # 计算上卦和下卦
+        first_sum = sum(first_half)
+        second_sum = sum(second_half)
+        
+        shang_gua_num = first_sum % 8 if first_sum % 8 != 0 else 8
+        xia_gua_num = second_sum % 8 if second_sum % 8 != 0 else 8
+        
+        # 计算动爻（传统方法：重卦总数除六）
+        # 重卦总数 = 上卦数 + 下卦数 + 时辰数
+        zhong_gua_total = shang_gua_num + xia_gua_num + (shichen if shichen else 0)
+        dong_yao = zhong_gua_total % 6 if zhong_gua_total % 6 != 0 else 6
         
         # 获取卦名
         shang_gua_name = XIANTIAN_BAGUA[shang_gua_num]
         xia_gua_name = XIANTIAN_BAGUA[xia_gua_num]
         
         return {
-            "input_numbers": [num1, num2],
+            "input_numbers": numbers,
+            "first_half": first_half,
+            "second_half": second_half,
+            "first_sum": first_sum,
+            "second_sum": second_sum,
+            "shichen": shichen,
+            "zhong_gua_total": zhong_gua_total,
             "shang_gua": {
                 "name": shang_gua_name,
                 "number": shang_gua_num,

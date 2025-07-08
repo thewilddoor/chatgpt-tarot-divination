@@ -33,7 +33,7 @@ class TiYongAnalyzer:
         ti_wuxing = BAGUA_WUXING[ti_gua]
         yong_wuxing = BAGUA_WUXING[yong_gua]
         
-        relation = cls._get_wuxing_relation(yong_wuxing, ti_wuxing)
+        relation = cls._get_ti_yong_relation(ti_wuxing, yong_wuxing)
         
         return {
             "ti_gua": {
@@ -79,9 +79,44 @@ class TiYongAnalyzer:
         elif (from_element, to_element) in ke_relations:
             return ke_relations[(from_element, to_element)]
         elif (to_element, from_element) in sheng_relations:
-            return f"{to_element.value}被{from_element.value}生"
+            return f"{from_element.value}生{to_element.value}"
         elif (to_element, from_element) in ke_relations:
-            return f"{to_element.value}被{from_element.value}克"
+            return f"{from_element.value}克{to_element.value}"
+        
+        return "无明显关系"
+    
+    @classmethod
+    def _get_ti_yong_relation(cls, ti_element: WuXing, yong_element: WuXing) -> str:
+        """获取体用关系"""
+        if ti_element == yong_element:
+            return "比和"
+        
+        # 五行相生关系
+        sheng_relations = {
+            (WuXing.WOOD, WuXing.FIRE): True,
+            (WuXing.FIRE, WuXing.EARTH): True,
+            (WuXing.EARTH, WuXing.METAL): True,
+            (WuXing.METAL, WuXing.WATER): True,
+            (WuXing.WATER, WuXing.WOOD): True
+        }
+        
+        # 五行相克关系
+        ke_relations = {
+            (WuXing.METAL, WuXing.WOOD): True,
+            (WuXing.WOOD, WuXing.EARTH): True,
+            (WuXing.EARTH, WuXing.WATER): True,
+            (WuXing.WATER, WuXing.FIRE): True,
+            (WuXing.FIRE, WuXing.METAL): True
+        }
+        
+        if (ti_element, yong_element) in ke_relations:
+            return "体克用"  # 体卦克用卦，吉
+        elif (yong_element, ti_element) in ke_relations:
+            return "用克体"  # 用卦克体卦，凶
+        elif (ti_element, yong_element) in sheng_relations:
+            return "体生用"  # 体卦生用卦，耗损
+        elif (yong_element, ti_element) in sheng_relations:
+            return "用生体"  # 用卦生体卦，有益
         
         return "无明显关系"
     

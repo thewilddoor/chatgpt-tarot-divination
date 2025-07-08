@@ -1,71 +1,20 @@
 <script setup>
-import { NSpin, NButton, useMessage } from 'naive-ui'
-import { onMounted, ref } from "vue";
-import { useRouter, useRoute } from 'vue-router'
-import { useStorage } from '@vueuse/core'
+import { NButton } from 'naive-ui'
+import { useRouter } from 'vue-router'
 
-const state_jwt = useStorage('jwt')
-const API_BASE = import.meta.env.VITE_API_BASE || "";
 const router = useRouter();
-const route = useRoute();
-const loading = ref(false);
-const message = useMessage();
-
-onMounted(async () => {
-    if (route.path === '/login/github') {
-        loading.value = true;
-        try {
-            const response = await fetch(`${API_BASE}/api/v1/oauth`, {
-                method: "POST",
-                body: JSON.stringify({
-                    login_type: "github",
-                    code: route.query.code,
-                }),
-                headers: {
-                    "Content-Type": "application/json"
-                },
-            });
-            if (!response.ok) {
-                message.error(`${response.status} ${await response.text()}` || "登录失败");
-            }
-            let res = await response.json();
-            state_jwt.value = res;
-            window.location.href = "/";
-        } catch (error) {
-            console.error(error);
-            message.error(`登录失败: ${error.message || "未知错误"}`);
-        }
-        finally {
-            loading.value = false;
-        }
-    }
-})
-
-const onGithubLogin = async () => {
-    try {
-        loading.value = true;
-        const response = await fetch(`${API_BASE}/api/v1/login?login_type=github&redirect_url=${window.location.origin}/login/github`, {
-            method: "GET",
-        });
-        if (!response.ok) {
-            message.error(`${response.status} ${await response.text()}` || "登录失败");
-        }
-        let res = await response.json();
-        window.location.href = res;
-    } catch (error) {
-        console.error(error);
-        message.error(error.message || "登录失败");
-    } finally {
-        loading.value = false;
-    }
-};
 </script>
 
 <template>
-    <n-spin size="large" description="正在登录..." :show="loading">
-        <n-button type="primary" block strong @click="onGithubLogin">Github 登录</n-button>
-        <n-button type="secondary" block strong @click="router.push('/')">返回主页</n-button>
-    </n-spin>
+    <div class="login-container">
+        <div class="login-content">
+            <h2>占卜系统</h2>
+            <p>欢迎使用塔罗牌、梅花易数等占卜功能</p>
+            <n-button type="primary" size="large" @click="router.push('/')">
+                进入应用
+            </n-button>
+        </div>
+    </div>
 </template>
 
 <style scoped>

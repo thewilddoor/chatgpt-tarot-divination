@@ -5,7 +5,7 @@
 """
 
 import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import sys
 import os
@@ -21,12 +21,11 @@ class MeiHuaCalculator:
     """梅花易数计算器主类"""
     
     @classmethod
-    def calculate(cls, num1: int, num2: int, question: str = "", dt: datetime.datetime = None) -> Dict[str, Any]:
+    def calculate(cls, numbers: List[int], question: str = "", dt: datetime.datetime = None) -> Dict[str, Any]:
         """
-        完整的梅花易数计算
+        完整的梅花易数计算（数字组起卦）
         Args:
-            num1: 第一个数字（上卦）
-            num2: 第二个数字（下卦）
+            numbers: 数字组
             question: 问题
             dt: 起卦时间，默认为当前时间
         Returns:
@@ -35,8 +34,11 @@ class MeiHuaCalculator:
         if dt is None:
             dt = datetime.datetime.now()
         
+        # 获取时辰
+        shichen = cls._get_shichen_from_datetime(dt)
+        
         # 1. 基础起卦
-        basic_qigua = MeiHuaCoreCalculator.number_qigua(num1, num2)
+        basic_qigua = MeiHuaCoreCalculator.number_group_qigua(numbers, shichen)
         
         # 2. 生成本卦、变卦、互卦
         shang_gua_name = basic_qigua["shang_gua"]["name"]
@@ -72,7 +74,13 @@ class MeiHuaCalculator:
             "basic_info": {
                 "question": question,
                 "qigua_time": dt.strftime("%Y年%m月%d日%H时%M分"),
-                "input_numbers": [num1, num2],
+                "input_numbers": numbers,
+                "first_half": basic_qigua["first_half"],
+                "second_half": basic_qigua["second_half"],
+                "first_sum": basic_qigua["first_sum"],
+                "second_sum": basic_qigua["second_sum"],
+                "shichen": shichen,
+                "zhong_gua_total": basic_qigua["zhong_gua_total"],
                 "season": season_analysis["season"],
                 "lunar_month": season_analysis["lunar_month"],
                 "time_dizhi": season_analysis["time_dizhi"]
@@ -108,6 +116,49 @@ class MeiHuaCalculator:
         }
         
         return result
+    
+    @classmethod
+    def _get_shichen_from_datetime(cls, dt: datetime.datetime) -> int:
+        """
+        从datetime对象获取时辰数字
+        Args:
+            dt: 时间对象
+        Returns:
+            时辰数字（1-12）
+        """
+        hour = dt.hour
+        
+        # 时辰对应表
+        # 子时：23-1（跨夜）、丑时：1-3、寅时：3-5、卯时：5-7
+        # 辰时：7-9、巳时：9-11、午时：11-13、未时：13-15
+        # 申时：15-17、酉时：17-19、戌时：19-21、亥时：21-23
+        
+        if hour == 23 or hour == 0:  # 子时
+            return 1
+        elif 1 <= hour < 3:  # 丑时
+            return 2
+        elif 3 <= hour < 5:  # 寅时
+            return 3
+        elif 5 <= hour < 7:  # 卯时
+            return 4
+        elif 7 <= hour < 9:  # 辰时
+            return 5
+        elif 9 <= hour < 11:  # 巳时
+            return 6
+        elif 11 <= hour < 13:  # 午时
+            return 7
+        elif 13 <= hour < 15:  # 未时
+            return 8
+        elif 15 <= hour < 17:  # 申时
+            return 9
+        elif 17 <= hour < 19:  # 酉时
+            return 10
+        elif 19 <= hour < 21:  # 戌时
+            return 11
+        elif 21 <= hour < 23:  # 亥时
+            return 12
+        else:
+            return 1
     
     @classmethod
     def format_for_llm(cls, result: Dict[str, Any]) -> str:

@@ -24,27 +24,45 @@ class TarotCardDrawer:
         self.shuffled_deck = []
         self.drawn_cards = []
     
-    def fisher_yates_shuffle(self, deck: List[Dict]) -> List[Dict]:
+    def fisher_yates_shuffle(self, deck: List[Dict], record_process: bool = False) -> tuple[List[Dict], List[Dict]]:
         """
         Fisher-Yates洗牌算法
         确保每种排列的概率相等
+        :param deck: 要洗牌的牌组
+        :param record_process: 是否记录洗牌过程
+        :return: (洗牌后的牌组, 洗牌过程记录)
         """
         shuffled = copy.deepcopy(deck)
         n = len(shuffled)
+        shuffle_steps = []
         
         # 从最后一个元素开始向前遍历
         for i in range(n - 1, 0, -1):
             # 生成0到i之间的随机索引
             j = random.randint(0, i)
+            
+            # 记录洗牌步骤
+            if record_process:
+                step = {
+                    "step": n - i,
+                    "position_a": i,
+                    "position_b": j,
+                    "card_a": shuffled[i]["name_zh"],
+                    "card_b": shuffled[j]["name_zh"],
+                    "swapped": i != j
+                }
+                shuffle_steps.append(step)
+            
             # 交换元素
             shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
         
-        return shuffled
+        return shuffled, shuffle_steps
     
-    def shuffle_deck(self):
+    def shuffle_deck(self, record_process: bool = False):
         """洗牌"""
-        self.shuffled_deck = self.fisher_yates_shuffle(self.deck)
+        self.shuffled_deck, self.shuffle_steps = self.fisher_yates_shuffle(self.deck, record_process)
         self.drawn_cards = []
+        return self.shuffle_steps if record_process else []
     
     def draw_single_card(self) -> Dict[str, Any]:
         """
@@ -75,14 +93,15 @@ class TarotCardDrawer:
         self.drawn_cards.append(drawn_card)
         return drawn_card
     
-    def draw_three_card_spread(self, positions: Optional[List[int]] = None) -> Dict[str, Any]:
+    def draw_three_card_spread(self, positions: Optional[List[int]] = None, show_shuffle: bool = False) -> Dict[str, Any]:
         """
         抽取三牌阵
         :param positions: 指定的牌位位置列表，如果为None则随机抽取
+        :param show_shuffle: 是否展示洗牌过程
         :return: 包含三张牌和牌阵含义的完整结果
         """
-        # 重新洗牌确保随机性
-        self.shuffle_deck()
+        # 重新洗牌确保随机性，可选择记录洗牌过程
+        shuffle_steps = self.shuffle_deck(record_process=show_shuffle)
         
         cards = []
         
@@ -132,7 +151,7 @@ class TarotCardDrawer:
             
             spread_description = "经典的过去-现在-未来牌阵，适合了解事件的发展脉络"
         
-        return {
+        result = {
             "spread_type": "三牌阵",
             "spread_description": spread_description,
             "cards": cards,
@@ -140,6 +159,17 @@ class TarotCardDrawer:
             "timestamp": random.randint(1000000, 9999999),
             "draw_method": "位置选择" if positions else "随机抽取"
         }
+        
+        # 如果需要显示洗牌过程，添加洗牌信息
+        if show_shuffle:
+            result["shuffle_process"] = {
+                "total_steps": len(shuffle_steps),
+                "steps": shuffle_steps[:10],  # 只显示前10步，避免数据过多
+                "algorithm": "Fisher-Yates",
+                "deck_size": 78
+            }
+        
+        return result
     
     def draw_custom_spread(self, num_cards: int, spread_name: str = "自定义牌阵") -> Dict[str, Any]:
         """
@@ -244,13 +274,15 @@ tarot_drawer = TarotCardDrawer()
 
 
 def draw_tarot_reading(question: str = "", spread_type: str = "three_card", 
-                      draw_mode: str = "random", positions: Optional[List[int]] = None) -> tuple[str, Dict[str, Any]]:
+                      draw_mode: str = "random", positions: Optional[List[int]] = None,
+                      show_shuffle: bool = False) -> tuple[str, Dict[str, Any]]:
     """
     执行塔罗抽牌并返回格式化结果
     :param question: 用户问题
     :param spread_type: 牌阵类型 ("three_card", "single", "custom")
     :param draw_mode: 抽牌模式 ("random", "numbers")
     :param positions: 指定的牌位位置列表（当draw_mode为"numbers"时使用）
+    :param show_shuffle: 是否显示洗牌过程
     :return: (格式化的抽牌结果字符串, 原始抽牌数据)
     """
     if spread_type == "single":
@@ -266,12 +298,12 @@ def draw_tarot_reading(question: str = "", spread_type: str = "three_card",
     elif spread_type == "three_card":
         # 三牌阵
         if draw_mode == "numbers" and positions and len(positions) == 3:
-            spread_result = tarot_drawer.draw_three_card_spread(positions)
+            spread_result = tarot_drawer.draw_three_card_spread(positions, show_shuffle)
         else:
-            spread_result = tarot_drawer.draw_three_card_spread()
+            spread_result = tarot_drawer.draw_three_card_spread(None, show_shuffle)
     else:
         # 默认使用三牌阵
-        spread_result = tarot_drawer.draw_three_card_spread()
+        spread_result = tarot_drawer.draw_three_card_spread(None, show_shuffle)
     
     # 格式化结果
     formatted_result = format_spread_for_ai(spread_result)

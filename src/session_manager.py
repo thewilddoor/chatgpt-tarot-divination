@@ -17,7 +17,8 @@ class SessionManager:
             session_id=session_id,
             original_divination=original_divination,
             messages=[],
-            follow_up_count=0
+            follow_up_count=0,
+            created_at=time.time()
         )
         self.sessions[session_id] = session
         return session_id
@@ -88,10 +89,13 @@ class SessionManager:
         original = session.original_divination
         if original.get("prompt_type") == "plum_flower":
             plum_flower = original.get("plum_flower", {})
-            num1 = plum_flower.get("num1", 0)
-            num2 = plum_flower.get("num2", 0)
+            number = plum_flower.get("number", "")
+            use_custom_time = plum_flower.get("use_custom_time", False)
+            custom_datetime = plum_flower.get("custom_datetime", "")
             question = original.get("prompt", "")
-            return f"原始梅花易数占卜：数字{num1}和{num2}，问题：{question}"
+            
+            time_info = f"（自定义时间：{custom_datetime}）" if use_custom_time else "（当前时间）"
+            return f"原始梅花易数占卜：数字{number}{time_info}，问题：{question}"
         else:
             return f"原始{original.get('prompt_type', '')}占卜：{original.get('prompt', '')}"
     
@@ -103,15 +107,19 @@ class SessionManager:
         to_remove = []
         for session_id, session in self.sessions.items():
             if session.messages:
+                # 有消息的会话，检查最后消息时间
                 last_message_time = session.messages[-1].timestamp
                 if last_message_time < cutoff_time:
                     to_remove.append(session_id)
             else:
-                # 没有消息的会话，检查创建时间（简化处理）
-                to_remove.append(session_id)
+                # 没有消息的会话，检查创建时间
+                if session.created_at > 0 and session.created_at < cutoff_time:
+                    to_remove.append(session_id)
         
         for session_id in to_remove:
             del self.sessions[session_id]
+        
+        return len(to_remove)  # 返回清理的会话数量
 
 
 # 全局会话管理器实例
