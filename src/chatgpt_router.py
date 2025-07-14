@@ -29,9 +29,6 @@ client = OpenAI(
 router = APIRouter()
 _logger = logging.getLogger(__name__)
 STOP_WORDS = [
-    "忽略", "ignore", "指令", "命令", "command", "help", "帮助", "之前",
-    "幫助", "現在", "開始", "开始", "start", "restart", "重新开始", "重新開始",
-    "遵守", "遵循", "遵从", "遵從"
 ]
 
 
