@@ -1,8 +1,8 @@
 from . import base
 from . import tarot
-from . import birthday
 from . import dream
 from . import plum_flower
+from . import bazi
 from .base import DivinationFactory
 
 import logging

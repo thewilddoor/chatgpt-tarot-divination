@@ -32,6 +32,13 @@ class TarotNumbers(BaseModel):
     third: int = Field(ge=1, le=78, description="第三张牌的位置(1-78)")
 
 
+class Bazi(BaseModel):
+    birth_datetime: str = Field(description="出生时间，格式：YYYY-MM-DD HH:MM:SS")
+    gender: str = Field(default="male", description="性别，male或female")
+    is_lunar: bool = Field(default=False, description="是否为农历")
+    location: Optional[str] = Field(None, description="出生地点（可选，用于真太阳时修正）")
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
@@ -51,11 +58,13 @@ class DivinationSession(BaseModel):
 class DivinationBody(BaseModel):
     prompt: str
     prompt_type: str
-    birthday: str
+    birthday: Optional[str] = None
     plum_flower: Optional[PlumFlower] = None
     # 塔罗牌相关字段
     tarot_draw_mode: Optional[str] = Field(None, description="塔罗抽牌模式: random 或 numbers")
     tarot_numbers: Optional[TarotNumbers] = None
+    # 八字相关字段
+    bazi: Optional[Bazi] = None
     # 追问相关字段
     session_id: Optional[str] = None
     is_follow_up: bool = False

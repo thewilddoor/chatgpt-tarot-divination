@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试推理功能修复</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .test-title {
+            color: #8a2be2;
+            border-bottom: 2px solid #8a2be2;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+        
+        /* 思考标签样式 */
+        .think-container {
+            margin: 16px 0;
+            border: 1px solid rgba(138, 43, 226, 0.2);
+            border-radius: 8px;
+            background: rgba(138, 43, 226, 0.05);
+            overflow: hidden;
+        }
+
+        .think-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(138, 43, 226, 0.1);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            user-select: none;
+        }
+
+        .think-header:hover {
+            background: rgba(138, 43, 226, 0.15);
+        }
+
+        .think-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+
+        .think-text {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: #8a2be2;
+        }
+
+        .think-toggle {
+            font-size: 12px;
+            color: #8a2be2;
+            transition: transform 0.2s ease;
+        }
+
+        .think-content {
+            padding: 16px;
+            background: rgba(138, 43, 226, 0.02);
+            border-top: 1px solid rgba(138, 43, 226, 0.1);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .think-content p {
+            margin: 8px 0;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .think-content h3 {
+            color: #8a2be2;
+            margin: 12px 0 8px 0;
+        }
+
+        .think-content ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .think-content li {
+            margin: 4px 0;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .think-content strong {
+            color: #8a2be2;
+        }
+
+        .think-content code {
+            background: rgba(138, 43, 226, 0.1);
+            color: #8a2be2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="test-title">推理功能修复测试</h1>
+        
+        <h2>修复1: think标签内容渲染</h2>
+        <p>测试Markdown渲染是否正常工作</p>
+        
+        <div class="think-container">
+            <div class="think-header" onclick="toggleThink('test1')">
+                <span class="think-icon">🤔</span>
+                <span class="think-text">思考过程</span>
+                <span class="think-toggle" id="test1-toggle">▼</span>
+            </div>
+            <div class="think-content" id="test1" style="display: none;">
+                <h3>分析步骤</h3>
+                <p>我需要分析用户的八字信息：</p>
+                <ul>
+                    <li><strong>年柱</strong>：代表祖上和早年环境</li>
+                    <li><strong>月柱</strong>：代表父母和青年时期</li>
+                    <li><strong>日柱</strong>：代表本人和中年运势</li>
+                    <li><strong>时柱</strong>：代表子女和晚年归宿</li>
+                </ul>
+                <p>接下来我会分析五行的<code>生克关系</code>...</p>
+            </div>
+        </div>
+        
+        <p><strong>测试结果</strong>：think标签内的Markdown内容（标题、列表、粗体、代码）应该正确渲染。</p>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">修复2: 追问时reasoning显示</h2>
+        
+        <h3>场景1: 只有推理内容，还没有实际回复</h3>
+        <div class="think-container">
+            <div class="think-header" onclick="toggleThink('test2')">
+                <span class="think-icon">🤔</span>
+                <span class="think-text">思考过程</span>
+                <span class="think-toggle" id="test2-toggle">▼</span>
+            </div>
+            <div class="think-content" id="test2" style="display: none;">
+                <p>用户问了一个很复杂的追问问题...</p>
+                <p>我需要重新分析他的八字...</p>
+                <p>考虑到之前的分析结果...</p>
+            </div>
+        </div>
+        <p style="color: #666; font-style: italic;">（此时还没有实际回复内容）</p>
+        
+        <h3>场景2: 推理内容 + 实际回复</h3>
+        <div class="think-container">
+            <div class="think-header" onclick="toggleThink('test3')">
+                <span class="think-icon">🤔</span>
+                <span class="think-text">思考过程</span>
+                <span class="think-toggle" id="test3-toggle">▼</span>
+            </div>
+            <div class="think-content" id="test3" style="display: none;">
+                <p>根据之前的分析，现在我需要...</p>
+                <p>重新考虑大运的影响...</p>
+            </div>
+        </div>
+        
+        <p>根据您的追问，我重新分析了您的八字...</p>
+        <p><strong>测试结果</strong>：在追问模式下，即使先有推理内容，后有实际回复，也应该能正确显示。</p>
+    </div>
+
+    <div class="test-container">
+        <h2 class="test-title">修复总结</h2>
+        
+        <h3>修复的问题</h3>
+        <ol>
+            <li><strong>think标签内容不渲染</strong>：现在think标签内的Markdown内容会被正确渲染</li>
+            <li><strong>追问时reasoning不显示</strong>：修复了显示条件，现在追问时也能正确显示推理过程</li>
+            <li><strong>对话历史记录问题</strong>：确保带有推理内容的回复能正确保存到对话历史中</li>
+        </ol>
+        
+        <h3>技术细节</h3>
+        <ul>
+            <li>修改了 <code>processThinkTags</code> 函数的处理顺序</li>
+            <li>修改了追问模式下的显示条件</li>
+            <li>修改了对话历史保存的条件判断</li>
+            <li>确保了推理内容的流式显示</li>
+        </ul>
+    </div>
+
+    <script>
+        function toggleThink(id) {
+            const content = document.getElementById(id);
+            const toggle = document.getElementById(id + '-toggle');
+            
+            if (content && toggle) {
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    toggle.textContent = '▲';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '▼';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

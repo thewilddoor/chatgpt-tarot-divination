@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试Think标签渲染修复</title>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .step {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .step h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        /* 思考标签样式 */
+        .think-container {
+            margin: 16px 0;
+            border: 1px solid rgba(138, 43, 226, 0.2);
+            border-radius: 8px;
+            background: rgba(138, 43, 226, 0.05);
+            overflow: hidden;
+        }
+
+        .think-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(138, 43, 226, 0.1);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            user-select: none;
+        }
+
+        .think-header:hover {
+            background: rgba(138, 43, 226, 0.15);
+        }
+
+        .think-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+
+        .think-text {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: #8a2be2;
+        }
+
+        .think-toggle {
+            font-size: 12px;
+            color: #8a2be2;
+            transition: transform 0.2s ease;
+        }
+
+        .think-content {
+            padding: 16px;
+            background: rgba(138, 43, 226, 0.02);
+            border-top: 1px solid rgba(138, 43, 226, 0.1);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .think-content p {
+            margin: 8px 0;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .result {
+            border: 2px solid #4CAF50;
+            background: #f9fff9;
+            padding: 15px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Think标签渲染修复测试</h1>
+        
+        <div class="step">
+            <h4>步骤1：原始内容</h4>
+            <pre id="original-content"></pre>
+        </div>
+        
+        <div class="step">
+            <h4>步骤2：处理think标签后（替换为占位符）</h4>
+            <pre id="processed-content"></pre>
+        </div>
+        
+        <div class="step">
+            <h4>步骤3：Markdown渲染后</h4>
+            <pre id="rendered-content"></pre>
+        </div>
+        
+        <div class="step">
+            <h4>步骤4：恢复think标签后</h4>
+            <pre id="final-content"></pre>
+        </div>
+        
+        <div class="result">
+            <h4>最终渲染结果：</h4>
+            <div id="final-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 markdown-it
+        const md = window.markdownit();
+        
+        // 测试内容
+        const testContent = `# 八字分析结果
+
+<think>
+用户问的是"你是谁"，但提供了八字数据。
+
+## 分析步骤：
+1. **身份确认**：我是AI八字大师
+2. **数据分析**：分析提供的JSON数据
+3. **专业回复**：基于八字理论给出分析
+
+关键信息：
+- 出生时间：2008年6月9日18:55
+- 性别：男命
+- 四柱：戊子、戊午、庚辰、乙酉
+</think>
+
+## 回复内容
+
+作为您的八字命理顾问，我来为您分析提供的八字信息。
+
+### 基本信息
+- **出生时间**：2008年6月9日18:55
+- **性别**：男命
+- **四柱**：戊子年、戊午月、庚辰日、乙酉时
+
+### 五行分析
+您的命局中土极强（35%），需要注意平衡。`;
+
+        // 处理<think>标签，转换为HTML注释占位符
+        function processThinkTags(content) {
+            if (!content) return '';
+            
+            const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+            
+            return content.replace(thinkRegex, (match, thinkContent) => {
+                const uniqueId = 'think-' + Math.random().toString(36).substr(2, 9);
+                const renderedThinkContent = md.render(thinkContent.trim());
+                return `<!-- THINK_START_${uniqueId} -->${renderedThinkContent}<!-- THINK_END_${uniqueId} -->`;
+            });
+        }
+
+        // 恢复think标签的HTML结构
+        function restoreThinkTags(content) {
+            if (!content) return '';
+            
+            const placeholderRegex = /<!-- THINK_START_([a-zA-Z0-9-]+) -->([\s\S]*?)<!-- THINK_END_\1 -->/g;
+            
+            return content.replace(placeholderRegex, (match, uniqueId, thinkContent) => {
+                return `<div class="think-container">
+                  <div class="think-header" onclick="toggleThink('${uniqueId}')">
+                    <span class="think-icon">🤔</span>
+                    <span class="think-text">思考过程</span>
+                    <span class="think-toggle" id="${uniqueId}-toggle">▼</span>
+                  </div>
+                  <div class="think-content" id="${uniqueId}" style="display: none;">
+                    ${thinkContent}
+                  </div>
+                </div>`;
+            });
+        }
+
+        // 渲染AI回复的函数
+        function renderAIResponse(content) {
+            // 1. 先处理<think>标签，替换为占位符
+            const processedContent = processThinkTags(content);
+            
+            // 2. 渲染Markdown
+            const renderedContent = md.render(processedContent);
+            
+            // 3. 恢复think标签的HTML结构
+            return restoreThinkTags(renderedContent);
+        }
+
+        // 执行测试
+        function runTest() {
+            // 步骤1：显示原始内容
+            document.getElementById('original-content').textContent = testContent;
+            
+            // 步骤2：处理think标签
+            const processedContent = processThinkTags(testContent);
+            document.getElementById('processed-content').textContent = processedContent;
+            
+            // 步骤3：Markdown渲染
+            const renderedContent = md.render(processedContent);
+            document.getElementById('rendered-content').textContent = renderedContent;
+            
+            // 步骤4：恢复think标签
+            const finalContent = restoreThinkTags(renderedContent);
+            document.getElementById('final-content').textContent = finalContent;
+            
+            // 最终结果
+            const result = renderAIResponse(testContent);
+            document.getElementById('final-result').innerHTML = result;
+        }
+
+        // 切换think标签显示/隐藏
+        function toggleThink(id) {
+            const content = document.getElementById(id);
+            const toggle = document.getElementById(id + '-toggle');
+            
+            if (content && toggle) {
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    toggle.textContent = '▲';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '▼';
+                }
+            }
+        }
+
+        // 页面加载后运行测试
+        window.onload = function() {
+            runTest();
+            
+            // 使toggleThink函数全局可用
+            window.toggleThink = toggleThink;
+        };
+    </script>
+</body>
+</html>

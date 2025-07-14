@@ -112,7 +112,8 @@ async def divination(
             birthday=original_divination.get("birthday", ""),
             plum_flower=None,
             tarot_draw_mode=original_divination.get("tarot_draw_mode", "random"),
-            tarot_numbers=None
+            tarot_numbers=None,
+            bazi=None
         )
         
         # 如果是梅花易数，重建plum_flower对象
@@ -132,6 +133,17 @@ async def divination(
                 first=tarot_data.get("first", 1),
                 second=tarot_data.get("second", 2),
                 third=tarot_data.get("third", 3)
+            )
+        
+        # 如果是八字，重建bazi对象
+        if original_prompt_type == "bazi" and original_divination.get("bazi"):
+            bazi_data = original_divination["bazi"]
+            temp_body.bazi = SimpleNamespace(
+                birth_datetime=bazi_data.get("birth_datetime", "2000-08-17 10:30:00"),
+                gender=bazi_data.get("gender", "male"),
+                is_lunar=bazi_data.get("is_lunar", False),
+                location=bazi_data.get("location", ""),
+                model_dump=lambda: bazi_data
             )
         
         # 对塔罗牌类型特殊处理，追问时不重新抽牌
@@ -172,7 +184,8 @@ async def divination(
             "birthday": divination_body.birthday,
             "plum_flower": divination_body.plum_flower.model_dump() if divination_body.plum_flower else None,
             "tarot_draw_mode": divination_body.tarot_draw_mode,
-            "tarot_numbers": divination_body.tarot_numbers.model_dump() if divination_body.tarot_numbers else None
+            "tarot_numbers": divination_body.tarot_numbers.model_dump() if divination_body.tarot_numbers else None,
+            "bazi": divination_body.bazi.model_dump() if divination_body.bazi else None
         }
         session_id = session_manager.create_session(original_divination)
         logger.info(f"Created new session: {session_id}")
@@ -182,7 +195,17 @@ async def divination(
     custom_api_key = request.headers.get("x-api-key")
     custom_api_model = request.headers.get("x-api-model")
     api_client = client
-    api_model = custom_api_model if custom_api_model else settings.model
+    
+    # Get the appropriate model based on divination type
+    if is_follow_up:
+        # For follow-up requests, get the original divination type from session
+        session = session_manager.get_session(divination_body.session_id)
+        divination_type = session.original_divination.get("prompt_type", "tarot")
+    else:
+        # For first-time requests, get from the request body
+        divination_type = divination_body.prompt_type
+    
+    api_model = custom_api_model if custom_api_model else settings.get_model_for_divination_type(divination_type)
     if custom_base_url and custom_api_key:
         api_client = OpenAI(api_key=custom_api_key, base_url=custom_base_url, timeout=60.0)
     elif custom_api_key:
@@ -215,34 +238,85 @@ async def divination(
                 # 首次占卜，直接添加用户消息
                 messages.append({"role": "user", "content": prompt})
             
-            ai_stream = api_client.chat.completions.create(
-                model=api_model,
-                max_tokens=8192,
-                temperature=0.6,
-                stream=True,
-                messages=messages,
+            # 构建API请求参数
+            api_params = {
+                "model": api_model,
+                "max_tokens": 8192,
+                "temperature": 0.6,
+                "stream": True,
+                "messages": messages,
                 # OpenRouter specific headers can be added here if needed
-                extra_headers={
+                "extra_headers": {
                     "HTTP-Referer": "https://github.com/your-repo",
                     "X-Title": "AI Divination App"
                 }
-            )
+            }
+            
+            # 对于支持推理的模型，添加推理参数到extra_body
+            if (settings.enable_reasoning and 
+                ("deepseek/deepseek-r1" in api_model.lower() or "r1" in api_model.lower())):
+                api_params["extra_body"] = {"include_reasoning": True}
+                _logger.info(f"Using reasoning model {api_model} with include_reasoning=True")
+            
+            _logger.debug(f"API request params: {api_params}")
+            ai_stream = api_client.chat.completions.create(**api_params)
             
             complete_response = ""
+            complete_reasoning = ""
             for event in ai_stream:
-                if event.choices and event.choices[0].delta and event.choices[0].delta.content:
-                    current_response = event.choices[0].delta.content
-                    # 确保内容不为空且不重复
+                if event.choices and event.choices[0].delta:
+                    delta = event.choices[0].delta
+                    current_response = ""
+                    current_reasoning = ""
+                    
+                    # 调试：打印delta的所有属性（仅在有内容时）
+                    if delta.content or any(hasattr(delta, field) for field in ['reasoning_content', 'reasoning', 'think']):
+                        _logger.info(f"Delta attributes: {[attr for attr in dir(delta) if not attr.startswith('_')]}")
+                        _logger.info(f"Delta content: {delta.content if delta.content else 'None'}")
+                    
+                    # 处理常规内容
+                    if delta.content:
+                        current_response = delta.content
+                        if current_response and current_response.strip():
+                            complete_response += current_response
+                    
+                    # 处理推理内容（尝试多种可能的字段名）
+                    reasoning_fields = ['reasoning_content', 'reasoning', 'think']
+                    for field in reasoning_fields:
+                        if hasattr(delta, field):
+                            reasoning_value = getattr(delta, field)
+                            if reasoning_value:
+                                _logger.info(f"Found reasoning content in field '{field}': {reasoning_value[:100]}...")
+                                current_reasoning = reasoning_value
+                                if current_reasoning and current_reasoning.strip():
+                                    complete_reasoning += current_reasoning
+                                break
+                    
+                    # 发送推理内容
+                    if current_reasoning and current_reasoning.strip():
+                        reasoning_data = {
+                            "content": current_reasoning,
+                            "content_type": "reasoning",
+                            "session_id": session_id,
+                            "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
+                            "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
+                        }
+                        yield f"data: {json.dumps(reasoning_data)}\n\n"
+                    
+                    # 发送常规响应数据和会话信息
                     if current_response and current_response.strip():
-                        complete_response += current_response
-                        # 发送响应数据和会话信息
                         response_data = {
                             "content": current_response,
+                            "content_type": "response",
                             "session_id": session_id,
                             "follow_up_count": session_manager.get_session(session_id).follow_up_count if session_id else 0,
                             "can_follow_up": session_manager.can_follow_up(session_id) if session_id else True
                         }
                         yield f"data: {json.dumps(response_data)}\n\n"
+            
+            # 如果有推理内容，将其添加到完整响应的开头
+            if complete_reasoning:
+                complete_response = f"<think>{complete_reasoning}</think>\n\n{complete_response}"
             
             # 将AI回复添加到会话
             if session_id and complete_response:

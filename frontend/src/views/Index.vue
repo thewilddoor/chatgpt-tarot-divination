@@ -22,10 +22,9 @@ const state_jwt = useStorage('jwt')
 const prompt = ref("");
 const result = useStorage("result", "");
 const tmp_result = ref("");
+const tmp_reasoning = ref("");
 const prompt_type = useStorage("prompt_type", "tarot");
 const menu_type = useStorage("menu_type", "divination");
-const lunarBirthday = ref("");
-const birthday = useStorage("birthday", "2000-08-17 00:00:00");
 const loading = ref(false);
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 const IS_TAURI = import.meta.env.VITE_IS_TAURI || "";
@@ -40,6 +39,14 @@ const plum_flower = useStorage("plum_flower", {
 // 塔罗牌相关状态
 const tarot_draw_mode = useStorage("tarot_draw_mode", "random")
 const tarot_numbers = useStorage("tarot_numbers", { first: 1, second: 2, third: 3 })
+
+// 八字相关状态
+const bazi = useStorage("bazi", {
+  birth_datetime: "2000-08-17 10:30:00",
+  gender: "male",
+  is_lunar: false,
+  location: ""
+})
 
 // 追问相关状态
 const followUpQuestion = ref("")
@@ -116,6 +123,7 @@ const onSubmit = async (isFollowUp) => {
     
     // 清理临时结果，准备接收新内容
     tmp_result.value = "";
+    tmp_reasoning.value = "";
     
     if (!isFollowUp) {
       result.value = "";
@@ -140,10 +148,10 @@ const onSubmit = async (isFollowUp) => {
     let requestBody = {
       prompt: prompt.value || "我的财务状况如何",
       prompt_type: prompt_type.value,
-      birthday: birthday.value,
       plum_flower: prompt_type.value == "plum_flower" ? plum_flower.value : null,
       tarot_draw_mode: prompt_type.value == "tarot" ? tarot_draw_mode.value : null,
       tarot_numbers: prompt_type.value == "tarot" && tarot_draw_mode.value == "numbers" ? tarot_numbers.value : null,
+      bazi: prompt_type.value == "bazi" ? bazi.value : null,
       is_follow_up: isFollowUp,
       session_id: isFollowUp ? currentSession.value.sessionId : null,
       follow_up_question: isFollowUp ? followUpQuestion.value : null
@@ -178,8 +186,17 @@ const onSubmit = async (isFollowUp) => {
             // 兼容旧格式
             tmp_result.value += data;
           } else if (data.content) {
-            // 新格式：包含会话信息
-            tmp_result.value += data.content;
+            // 新格式：根据内容类型处理
+            if (data.content_type === 'reasoning') {
+              // 处理推理内容
+              tmp_reasoning.value += data.content;
+            } else if (data.content_type === 'response') {
+              // 处理常规内容
+              tmp_result.value += data.content;
+            } else {
+              // 向后兼容：没有content_type字段的旧格式，默认作为常规内容
+              tmp_result.value += data.content;
+            }
             
             // 更新会话状态
             updateSession(data);
@@ -187,7 +204,18 @@ const onSubmit = async (isFollowUp) => {
           
           // 只在首次占卜时更新result.value，追问时只更新tmp_result用于对话历史
           if (!isFollowUp) {
-            result.value = md.render(tmp_result.value);
+            // 构建要渲染的内容
+            let contentToRender = '';
+            if (tmp_reasoning.value) {
+              contentToRender = `<think>${tmp_reasoning.value}</think>\n\n${tmp_result.value}`;
+            } else {
+              contentToRender = tmp_result.value;
+            }
+            
+            // 只有当有内容时才更新result.value
+            if (contentToRender) {
+              result.value = renderAIResponse(contentToRender);
+            }
           }
         } catch (error) {
           console.error(error);
@@ -200,9 +228,19 @@ const onSubmit = async (isFollowUp) => {
           isFollowUpMode.value = false;
         }
         
-        // 将AI回复添加到对话历史
-        if (tmp_result.value && currentSession.value.sessionId) {
-          addToConversation(tmp_result.value, false);
+        // 将AI回复添加到对话历史，包括推理内容
+        if ((tmp_result.value || tmp_reasoning.value) && currentSession.value.sessionId) {
+          let fullResponse = '';
+          if (tmp_reasoning.value) {
+            fullResponse = `<think>${tmp_reasoning.value}</think>\n\n${tmp_result.value}`;
+          } else {
+            fullResponse = tmp_result.value;
+          }
+          
+          // 只有当有实际内容时才添加到对话历史
+          if (fullResponse.trim()) {
+            addToConversation(fullResponse, false);
+          }
         }
       },
       onerror(err) {
@@ -248,6 +286,7 @@ const startNewDivination = () => {
   resetSession();
   isFollowUpMode.value = false;
   tmp_result.value = "";
+  tmp_reasoning.value = "";
   result.value = "";
   followUpQuestion.value = "";
 };
@@ -257,7 +296,7 @@ const getResultTypeColor = () => {
   const typeColors = {
     'tarot': 'primary',
     'plum_flower': 'success', 
-    'birthday': 'warning',
+    'bazi': 'secondary',
     'dream': 'info'
   };
   return typeColors[prompt_type.value] || 'default';
@@ -268,28 +307,74 @@ const getResultTypeName = () => {
   const typeNames = {
     'tarot': '塔罗占卜',
     'plum_flower': '梅花易数',
-    'birthday': '生辰八字',
+    'bazi': '八字排盘',
     'dream': '周公解梦'
   };
   return typeNames[prompt_type.value] || '占卜';
 };
 
-const computeLunarBirthday = (newBirthday) => {
-  try {
-    let date = new Date(newBirthday)
-    let solar = Solar.fromYmdHms(
-      date.getFullYear(), date.getMonth() + 1, date.getDate(),
-      date.getHours(), date.getMinutes(), date.getSeconds());
-    lunarBirthday.value = solar.getLunar().toFullString();
-  } catch (error) {
-    console.error(error)
-    lunarBirthday.value = '转换失败'
+// 分离think内容和实际回复内容
+const separateThinkAndAnswer = (content) => {
+  if (!content) return { thinkContent: '', answerContent: content };
+  
+  // 匹配所有<think>标签及其内容
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+  let thinkContent = '';
+  let matches;
+  
+  // 提取所有think内容
+  while ((matches = thinkRegex.exec(content)) !== null) {
+    thinkContent += matches[1] + '\n\n';
   }
-}
+  
+  // 移除think标签，保留纯回复内容
+  const answerContent = content.replace(thinkRegex, '').trim();
+  
+  return {
+    thinkContent: thinkContent.trim(),
+    answerContent: answerContent
+  };
+};
 
-watch(birthday, async (newBirthday, oldBirthday) => {
-  computeLunarBirthday(newBirthday)
-})
+// 渲染think内容为可折叠组件
+const renderThinkContent = (thinkContent) => {
+  if (!thinkContent) return '';
+  
+  const uniqueId = 'think-' + Math.random().toString(36).substr(2, 9);
+  const renderedThinkContent = md.render(thinkContent);
+  
+  return `<div class="think-container">
+    <div class="think-header" onclick="toggleThink('${uniqueId}')">
+      <span class="think-icon">🤔</span>
+      <span class="think-text">思考过程</span>
+      <span class="think-toggle" id="${uniqueId}-toggle">▼</span>
+    </div>
+    <div class="think-content" id="${uniqueId}" style="display: none;">
+      ${renderedThinkContent}
+    </div>
+  </div>`;
+};
+
+// 渲染AI回复的函数
+const renderAIResponse = (content) => {
+  const { thinkContent, answerContent } = separateThinkAndAnswer(content);
+  
+  let result = '';
+  
+  // 先渲染think内容（如果有）
+  if (thinkContent) {
+    result += renderThinkContent(thinkContent);
+  }
+  
+  // 再渲染实际回复内容
+  if (answerContent) {
+    result += md.render(answerContent);
+  }
+  
+  return result;
+};
+
+
 
 const changeTab = async (delta) => {
   let curIndex = DIVINATION_OPTIONS.findIndex((option) => option.key === prompt_type.value);
@@ -303,7 +388,21 @@ const changeTab = async (delta) => {
 }
 
 onMounted(async () => {
-  computeLunarBirthday(birthday.value)
+  // 定义全局的toggleThink函数
+  window.toggleThink = (id) => {
+    const content = document.getElementById(id);
+    const toggle = document.getElementById(id + '-toggle');
+    
+    if (content && toggle) {
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▲';
+      } else {
+        content.style.display = 'none';
+        toggle.textContent = '▼';
+      }
+    }
+  };
 });
 </script>
 
@@ -374,16 +473,6 @@ onMounted(async () => {
                 <p>数字值: {{ JSON.stringify(tarot_numbers) }}</p>
                 <p>按钮可用性: {{ isTarotNumbersComplete }}</p>
               </div>
-            </div>
-          </div>
-          <div v-if="prompt_type == 'birthday'">
-            <div style="display: inline-block; text-align: left;">
-              <n-form-item label="生日" label-placement="left">
-                <n-date-picker v-model:formatted-value="birthday" value-format="yyyy-MM-dd HH:mm:ss" type="datetime" />
-              </n-form-item>
-              <n-form-item label="农历" label-placement="left">
-                <p>{{ lunarBirthday }}</p>
-              </n-form-item>
             </div>
           </div>
           <div v-if="prompt_type == 'dream'">
@@ -476,6 +565,85 @@ onMounted(async () => {
               </n-form-item>
             </div>
           </div>
+          <div v-if="prompt_type == 'bazi'">
+            <div style="display: inline-block;">
+              <h4>八字排盘 - 专业命理分析</h4>
+              
+              <!-- 准确率和使用说明 -->
+              <div style="background: linear-gradient(135deg, rgba(138, 43, 226, 0.08), rgba(138, 43, 226, 0.03)); border: 1px solid rgba(138, 43, 226, 0.15); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                  <n-icon size="18" color="#8a2be2" style="margin-right: 8px;">
+                    <svg viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7A1,1 0 0,0 14,8H16A1,1 0 0,0 17,7V5.73C16.4,5.39 16,4.74 16,4A2,2 0 0,1 18,2A2,2 0 0,1 20,4C20,4.74 19.6,5.39 19,5.73V7A3,3 0 0,1 16,10V10.93C17.8,11.35 19,12.86 19,14.5C19,16.43 17.43,18 15.5,18H8.5C6.57,18 5,16.43 5,14.5C5,12.86 6.2,11.35 8,10.93V10A3,3 0 0,1 5,7V5.73C4.4,5.39 4,4.74 4,4A2,2 0 0,1 6,2A2,2 0 0,1 8,4C8,4.74 7.6,5.39 7,5.73V7A1,1 0 0,0 8,8H10A1,1 0 0,0 11,7V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2Z"/>
+                    </svg>
+                  </n-icon>
+                  <span style="font-weight: 600; color: #8a2be2; font-size: 14px;">算法说明</span>
+                </div>
+                <p style="margin: 0; color: #555; font-size: 13px; line-height: 1.6;">
+                  基于传统四柱八字理论，采用专业排盘算法，结合《三命通会》、《穷通宝鉴》等经典文献。
+                  <strong>仅供参考</strong>，请结合个人实际情况理性判断，不可完全依赖占卜结果做重大人生决策。
+                </p>
+              </div>
+              
+              <n-form-item label="问题" label-placement="left">
+                <n-input v-model:value="prompt" type="textarea" round maxlength="40" :autosize="{ minRows: 2 }"
+                  placeholder="请输入你想了解的问题（可选，如：事业发展、婚姻感情、财运等）" />
+              </n-form-item>
+              
+              <n-form-item label="出生时间" label-placement="left">
+                <n-date-picker 
+                  v-model:formatted-value="bazi.birth_datetime" 
+                  value-format="yyyy-MM-dd HH:mm:ss" 
+                  type="datetime"
+                  placeholder="请选择准确的出生时间"
+                  style="width: 100%;"
+                />
+                <p style="margin-top: 5px; color: #666; font-size: 12px;">
+                  💡 请尽量准确填写出生时间，时辰对八字分析极其重要
+                </p>
+              </n-form-item>
+              
+              <n-form-item label="性别" label-placement="left">
+                <n-radio-group v-model:value="bazi.gender" name="gender">
+                  <n-space>
+                    <n-radio value="male">
+                      男性
+                    </n-radio>
+                    <n-radio value="female">
+                      女性
+                    </n-radio>
+                  </n-space>
+                </n-radio-group>
+              </n-form-item>
+              
+              <n-form-item label="历法" label-placement="left">
+                <n-radio-group v-model:value="bazi.is_lunar" name="calendar">
+                  <n-space>
+                    <n-radio :value="false">
+                      公历（推荐）
+                    </n-radio>
+                    <n-radio :value="true">
+                      农历
+                    </n-radio>
+                  </n-space>
+                </n-radio-group>
+                <p style="margin-top: 5px; color: #999; font-size: 12px;">
+                  通常使用公历即可，系统会自动转换为农历进行排盘
+                </p>
+              </n-form-item>
+              
+              <n-form-item label="出生地点" label-placement="left">
+                <n-input
+                  v-model:value="bazi.location"
+                  placeholder="如：北京市、上海市（可选，用于真太阳时修正）"
+                  style="width: 100%;"
+                />
+                <p style="margin-top: 5px; color: #999; font-size: 12px;">
+                  📍 出生地点可用于真太阳时修正，提高排盘准确度
+                </p>
+              </n-form-item>
+            </div>
+          </div>
           <div v-if="menu_type != 'about'" class="button-container">
             <n-button class="button" @click="showDrawer = !showDrawer" tertiary type="primary">
               {{ loading ? "点击打开占卜结果页面" : "查看占卜结果" }}
@@ -530,6 +698,16 @@ onMounted(async () => {
           <span>遵循传统梅花易数算法 • 综合准确率约80% • 结果仅供参考，请结合实际情况理性判断</span>
         </div>
         
+        <!-- 八字排盘算法说明和免责声明 -->
+        <div v-if="prompt_type === 'bazi'" class="bazi-disclaimer">
+          <n-icon size="16" style="margin-right: 6px; color: #8a2be2;">
+            <svg viewBox="0 0 24 24">
+              <path fill="currentColor" d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/>
+            </svg>
+          </n-icon>
+          <span>传统四柱八字算法 • 基于《三命通会》等经典 • 仅供参考，请理性判断，勿作重大决策依据</span>
+        </div>
+        
         <!-- 主要结果区域 -->
         <div class="result-container">
           <!-- 对话历史显示 -->
@@ -558,7 +736,7 @@ onMounted(async () => {
                 <div v-if="message.isUser" class="user-question">
                   {{ message.content }}
                 </div>
-                <div v-else class="ai-response" v-html="md.render(message.content)"></div>
+                <div v-else class="ai-response" v-html="renderAIResponse(message.content)"></div>
               </div>
             </div>
           </div>
@@ -586,7 +764,7 @@ onMounted(async () => {
           </div>
           
           <!-- 当前追问回复（流式显示） -->
-          <div v-if="loading && isFollowUpMode && tmp_result" class="current-followup-reply">
+          <div v-if="loading && isFollowUpMode && (tmp_result || tmp_reasoning)" class="current-followup-reply">
             <div class="message-card ai-message">
               <div class="message-header">
                 <div class="message-avatar">
@@ -601,7 +779,7 @@ onMounted(async () => {
                 <span class="streaming-indicator">💭 思考中...</span>
               </div>
               <div class="message-content">
-                <div class="ai-response" v-html="md.render(tmp_result)"></div>
+                <div class="ai-response" v-html="renderAIResponse(tmp_reasoning ? `<think>${tmp_reasoning}</think>\n\n${tmp_result}` : tmp_result)"></div>
               </div>
             </div>
           </div>
@@ -1027,6 +1205,52 @@ onMounted(async () => {
     font-size: 12px;
     margin: 0 0 12px 0;
   }
+  
+  /* 移动端思考标签样式 */
+  .think-container {
+    margin: 12px 0;
+    border-radius: 6px;
+  }
+  
+  .think-header {
+    padding: 10px 12px;
+  }
+  
+  .think-icon {
+    font-size: 14px;
+    margin-right: 6px;
+  }
+  
+  .think-text {
+    font-size: 13px;
+  }
+  
+  .think-toggle {
+    font-size: 11px;
+  }
+  
+  .think-content {
+    padding: 12px;
+  }
+  
+  .think-content p {
+    font-size: 13px;
+    margin: 6px 0;
+  }
+  
+  .think-content li {
+    font-size: 13px;
+  }
+  
+  .think-content code {
+    font-size: 12px;
+    padding: 1px 4px;
+  }
+  
+  .think-content blockquote {
+    margin: 10px 0;
+    padding: 8px 12px;
+  }
 }
 
 /* 塔罗牌抽牌模式样式 */
@@ -1067,8 +1291,164 @@ onMounted(async () => {
   color: #1a4a1d;
 }
 
+.bazi-disclaimer {
+  display: flex;
+  align-items: center;
+  background: rgba(138, 43, 226, 0.08);
+  border: 1px solid rgba(138, 43, 226, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #5d2a7b;
+  font-weight: 500;
+}
+
+/* 思考标签样式 */
+.think-container {
+  margin: 16px 0;
+  border: 1px solid rgba(138, 43, 226, 0.2);
+  border-radius: 8px;
+  background: rgba(138, 43, 226, 0.05);
+  overflow: hidden;
+}
+
+.think-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(138, 43, 226, 0.1);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.think-header:hover {
+  background: rgba(138, 43, 226, 0.15);
+}
+
+.think-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.think-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8a2be2;
+}
+
+.think-toggle {
+  font-size: 12px;
+  color: #8a2be2;
+  transition: transform 0.2s ease;
+}
+
+.think-content {
+  padding: 16px;
+  background: rgba(138, 43, 226, 0.02);
+  border-top: 1px solid rgba(138, 43, 226, 0.1);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.think-content p {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.think-content ul, .think-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.think-content li {
+  margin: 4px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.think-content strong {
+  color: #8a2be2;
+}
+
+.think-content code {
+  background: rgba(138, 43, 226, 0.1);
+  color: #8a2be2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.think-content blockquote {
+  border-left: 3px solid #8a2be2;
+  background: rgba(138, 43, 226, 0.08);
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+}
+
 /* 深色模式支持 */
 @media (prefers-color-scheme: dark) {
+  .think-container {
+    border-color: rgba(138, 43, 226, 0.4);
+    background: rgba(138, 43, 226, 0.1);
+  }
+  
+  .think-header {
+    background: rgba(138, 43, 226, 0.2);
+  }
+  
+  .think-header:hover {
+    background: rgba(138, 43, 226, 0.3);
+  }
+  
+  .think-text {
+    color: #c78bd2;
+  }
+  
+  .think-toggle {
+    color: #c78bd2;
+  }
+  
+  .think-content {
+    background: rgba(138, 43, 226, 0.08);
+    border-top-color: rgba(138, 43, 226, 0.2);
+  }
+  
+  .think-content p,
+  .think-content li {
+    color: #e0e0e0;
+  }
+  
+  .think-content strong {
+    color: #c78bd2;
+  }
+  
+  .think-content code {
+    background: rgba(138, 43, 226, 0.2);
+    color: #c78bd2;
+  }
+  
+  .think-content blockquote {
+    background: rgba(138, 43, 226, 0.15);
+    border-left-color: #c78bd2;
+  }
+  
   .title-text {
     color: #f0f0f0;
   }

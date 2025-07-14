@@ -6,10 +6,10 @@ export const DIVINATION_OPTIONS = [
         features: ['真实抽牌算法', '正逆位判断', '过去-现在-未来牌阵']
     },
     {
-        label: '生辰八字',
-        key: 'birthday',
-        description: '基于出生时间分析命理运势',
-        features: ['八字排盘', '五行分析', '运势预测']
+        label: '八字排盘',
+        key: 'bazi',
+        description: '专业四柱八字命理分析',
+        features: ['传统排盘', '格局分析', '大运流年', '命理指导']
     },
     {
         label: '周公解梦',

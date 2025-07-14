@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>简单Think标签测试</title>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            background: #f0f0f0;
+            padding: 10px;
+            margin: -15px -15px 15px -15px;
+        }
+        
+        /* 思考标签样式 */
+        .think-container {
+            margin: 16px 0;
+            border: 1px solid rgba(138, 43, 226, 0.2);
+            border-radius: 8px;
+            background: rgba(138, 43, 226, 0.05);
+            overflow: hidden;
+        }
+
+        .think-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(138, 43, 226, 0.1);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            user-select: none;
+        }
+
+        .think-header:hover {
+            background: rgba(138, 43, 226, 0.15);
+        }
+
+        .think-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+
+        .think-text {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: #8a2be2;
+        }
+
+        .think-toggle {
+            font-size: 12px;
+            color: #8a2be2;
+        }
+
+        .think-content {
+            padding: 16px;
+            background: rgba(138, 43, 226, 0.02);
+            border-top: 1px solid rgba(138, 43, 226, 0.1);
+        }
+
+        .think-content p {
+            margin: 8px 0;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Think标签渲染测试</h1>
+    
+    <div class="test-section">
+        <h3>原始输入内容</h3>
+        <pre id="input"></pre>
+    </div>
+    
+    <div class="test-section">
+        <h3>最终渲染结果</h3>
+        <div id="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>处理步骤（调试信息）</h3>
+        <p><strong>步骤1 - 分离think和answer内容：</strong></p>
+        <pre id="step1"></pre>
+        
+        <p><strong>步骤2 - 最终HTML结果：</strong></p>
+        <pre id="step2"></pre>
+        
+        <p><strong>优势：</strong></p>
+        <pre id="step3"></pre>
+    </div>
+
+    <script>
+        // 初始化 markdown-it
+        const md = window.markdownit();
+        
+        // 测试内容
+        const testContent = `# 八字分析
+
+<think>
+这是一个推理过程的例子。
+
+## 分析要点：
+1. **基本信息**：用户提供了完整的八字数据
+2. **问题理解**：虽然问的是"你是谁"，但应该基于八字数据回答
+3. **专业分析**：需要按照传统命理学理论分析
+
+关键数据：
+- 出生时间：2008年6月9日18:55
+- 性别：男命
+- 四柱干支：戊子、戊午、庚辰、乙酉
+</think>
+
+## 专业回复
+
+作为您的**八字命理顾问**，我来为您分析这个八字：
+
+### 基本信息
+- 出生时间：2008年6月9日18:55（男命）
+- 四柱：戊子年、戊午月、庚辰日、乙酉时
+
+### 命局特点
+您的八字中土旺金强，具有以下特征：
+1. 土极强（35%）- 性格稳重踏实
+2. 金较强（21.7%）- 决断力强，有原则`;
+
+        // 新的分离处理函数
+        function separateThinkAndAnswer(content) {
+            if (!content) return { thinkContent: '', answerContent: content };
+            
+            // 匹配所有<think>标签及其内容
+            const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+            let thinkContent = '';
+            let matches;
+            
+            // 提取所有think内容
+            while ((matches = thinkRegex.exec(content)) !== null) {
+                thinkContent += matches[1] + '\n\n';
+            }
+            
+            // 移除think标签，保留纯回复内容
+            const answerContent = content.replace(thinkRegex, '').trim();
+            
+            return {
+                thinkContent: thinkContent.trim(),
+                answerContent: answerContent
+            };
+        }
+
+        function renderThinkContent(thinkContent) {
+            if (!thinkContent) return '';
+            
+            const uniqueId = 'think-' + Math.random().toString(36).substr(2, 9);
+            const renderedThinkContent = md.render(thinkContent);
+            
+            return `<div class="think-container">
+              <div class="think-header" onclick="toggleThink('${uniqueId}')">
+                <span class="think-icon">🤔</span>
+                <span class="think-text">思考过程</span>
+                <span class="think-toggle" id="${uniqueId}-toggle">▼</span>
+              </div>
+              <div class="think-content" id="${uniqueId}" style="display: none;">
+                ${renderedThinkContent}
+              </div>
+            </div>`;
+        }
+
+        function renderAIResponse(content) {
+            const { thinkContent, answerContent } = separateThinkAndAnswer(content);
+            
+            let result = '';
+            
+            // 先渲染think内容（如果有）
+            if (thinkContent) {
+                result += renderThinkContent(thinkContent);
+            }
+            
+            // 再渲染实际回复内容
+            if (answerContent) {
+                result += md.render(answerContent);
+            }
+            
+            // 显示调试信息
+            document.getElementById('step1').textContent = `Think内容: ${thinkContent || '无'}\n\nAnswer内容: ${answerContent || '无'}`;
+            document.getElementById('step2').textContent = result;
+            document.getElementById('step3').textContent = `新方法的优势：
+1. 完全分离think和answer处理，避免相互干扰
+2. 不使用复杂的占位符系统，避免HTML注释乱码
+3. think内容的Markdown渲染独立进行，确保正确格式
+4. 代码逻辑更清晰，易于维护和调试
+5. 支持多个think块的处理`;
+            
+            return result;
+        }
+
+        function toggleThink(id) {
+            const content = document.getElementById(id);
+            const toggle = document.getElementById(id + '-toggle');
+            
+            if (content && toggle) {
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    toggle.textContent = '▲';
+                } else {
+                    content.style.display = 'none';
+                    toggle.textContent = '▼';
+                }
+            }
+        }
+
+        // 运行测试
+        window.onload = function() {
+            document.getElementById('input').textContent = testContent;
+            
+            const result = renderAIResponse(testContent);
+            document.getElementById('output').innerHTML = result;
+            
+            // 使函数全局可用
+            window.toggleThink = toggleThink;
+        };
+    </script>
+</body>
+</html>
